@@ -1,0 +1,33 @@
+Mozilla Bug #354493 Test Pilot Study Code
+
+https://bugzilla.mozilla.org/show_bug.cgi?id=354493
+
+Attempts to resolve Internet-->Intranet CSRF, but we need to know if this will
+break anything.
+
+
+This Test Pilot Study aims to discover how widespread the practice of Internet
+sites referencing Intranet sites is. The danger behind allowing Internet sites
+referencing Intranet sites is that such accesses may not be benign. Imagine
+what could happen if an Internet site attempted to change settings on your
+home router? Unfortunately, we are unable to distinguish between such a
+malicious attempt and and benign one such as a WiFi Hotspot redirecting an
+initial attempt to access the Internet to the router's captive portal page.
+
+The data needed could not be gathered by simply crawling the web as many of
+these interactions happen behind user logins and even Intranets.
+
+
+Outstanding bugs:
+1)
+ First Tab opened in window, when selecting
+ Right click on link -> Open in new tab
+ Will not cause the DOMContentLoaded even to fire
+ Only for the first tab. Subsequent tabs are okay
+2)
+ URLs will not be re-scanned if they have been
+ seen before, so dynamic content may be missed
+3)
+ We should really be tapping on the httpchannel
+ and recording the hosts from there based on the
+ origin of the current page. No time to figure out
