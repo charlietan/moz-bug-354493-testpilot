@@ -30,7 +30,7 @@ exports.experimentInfo = {
   versionNumber: 1, // update this when changing your study
     // so you can identify results submitted from different versions
 
-  duration: 3, // a number of days - fractions OK.
+  duration: 7, // a number of days - fractions OK.
   minTPVersion: "1.0a1", // Test Pilot versions older than this
     // will not run the study.
   minFXVersion: "3.6", // Firefox versions older than this will
@@ -328,7 +328,7 @@ var DNS = {
           }), Thread.currentQueue);
           if (DNS.consoleDump) DNS.log("Waiting for DNS query on " + host);
           if (!callback) Thread.spin(ctrl);
-        }
+        };
 
         if (callback) {
           t = Date.now();
@@ -432,7 +432,7 @@ var DNS = {
   },
   _ipRx: /^(?:\d+\.){3}\d+$|:.*:/,
   isIP: function(host) this._ipRx.test(host)
-};
+}; // end of DNS
 
 function DNSListener(callback) {
   if (callback) this.callback = callback;
