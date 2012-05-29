@@ -1,13 +1,5 @@
 BaseClasses = require("study_base_classes.js");
 
-// Our Test Pilot study must implement and expose four things:
-// 1. experimentInfo
-// 2. dataStoreInfo
-// 3. handlers
-// 4. webContent
-// We use the Cuddlefish 'exports' object to expose these.
-const EVENT_CODE_STUDY_STARTUP = 0;
-
 /*
  * Outstanding bugs:
  * 1)
@@ -99,7 +91,7 @@ function DNSRecord(record) {
       this.canonicalName = record.canonicalName;
     } catch(e) {}
     this.entries = [];
-    
+
     try {
       for (;;) this.entries.push(record.getNextAddrAsString());
     } catch(e) {
@@ -125,8 +117,8 @@ DNSRecord.prototype = {
   expireTime: 0,
   refreshing: false,
   localExtras: null, // AddressMatcher object which can be added to the LOCAL resolution
-  
-  
+
+
   isLocal: function(all) {
     return all
       ? "everyLocal" in this
@@ -140,12 +132,12 @@ DNSRecord.prototype = {
   get expired() {
     return Date.now() > this.expireTime;
   }
-  
+
 }
 
 
 var DNS = {
-  
+
   get logFile() {
     delete this.logFile;
     var logFile = Cc["@mozilla.org/file/directory_service;1"]
@@ -165,7 +157,7 @@ var DNS = {
         const header="*** Log start at "+new Date().toGMTString()+"\n";
         this.logStream.write(header,header.length);
       }
-      
+
       if (msg!=null) {
         msg += "\n";
         this.logStream.write(msg,msg.length);
@@ -175,19 +167,19 @@ var DNS = {
       dump(ex.message+"\noccurred logging this message:\n"+msg);
     }
   },
-  
+
   get _dns() {
     delete this._dns;
     return this._dns = Cc["@mozilla.org/network/dns-service;1"]
                   .getService(Ci.nsIDNSService);
   },
-  
+
   _cache: {
     CAPACITY: 400, // when we purge, we cut this to half
     _map: {__proto__: null},
     _ext: {__proto__: null},
     count: 0,
-    
+
 
     get: function(key) {
       return key in this._map && this._map[key];
@@ -204,7 +196,7 @@ var DNS = {
     evict: function(host) {
       return (host in this._map) && (delete this._map[host]);
     },
-    
+
     purge: function() {
       var max = this.CAPACITY / 2;
       if (this.count < max) return;
@@ -215,25 +207,25 @@ var DNS = {
       }
       this._doPurge(map, l, max);
     },
-    
+
     reset: function() {
       this._map = {__proto__: null};
       this._ext = {__proto__: null},
       this.count = 0;
     },
-    
+
     _oldLast: function(a, b) {
-      return a.t > b.t ? -1 : a.t < b.t ? 1 : 0; 
+      return a.t > b.t ? -1 : a.t < b.t ? 1 : 0;
     },
-    
+
     putExt: function(host) {
       this._ext[host] = true;
     },
     isExt: function(host) {
       return host in this._ext;
     },
-    
-    
+
+
     _doPurge: function(map, l, max) {
       l.sort(this._oldLast);
       for (var j = l.length; j-- > max;) {
@@ -242,13 +234,13 @@ var DNS = {
       this.count -= (l.length - max);
     }
   },
-  
+
   get idn() {
     delete this.idn;
     return this.idn =  Cc["@mozilla.org/network/idn-service;1"]
       .getService(Ci.nsIIDNService);
   },
-  
+
   _invalidRx: /[^\w\-\.]/,
   checkHostName: function(host) {
     if (this._invalidRx.test(host) && !this.isIP(host)) {
@@ -261,9 +253,9 @@ var DNS = {
     }
     return true;
   },
-  
+
   _resolving: {},
-  resolve: function(host, flags, callback) { 
+  resolve: function(host, flags, callback) {
     flags = flags || 0;
 
     var elapsed = 0, t;
@@ -272,7 +264,7 @@ var DNS = {
     var async = IOUtil.asyncNetworking || !!callback;
 */
     var async = !!callback;
-    
+
     var dnsRecord = cache.get(host);
     if (dnsRecord) {
       // cache invalidation, if needed
@@ -287,7 +279,7 @@ var DNS = {
         } else {
           flags |= 1;
         }
-        if (flags & 1) {  
+        if (flags & 1) {
           dnsRecord = null;
           cache.evict(host);
         }
@@ -296,27 +288,27 @@ var DNS = {
     if (dnsRecord) {
       if (DNS.logEnabled) DNS.log("Using cached DNS record for " + host);
     } else if (this.checkHostName(host)) {
-      
+
       if (async) {
         var resolving = this._resolving;
-  
+
         if (host in resolving) {
           DNS.log("Already resolving " + host);
-          
+
           if (callback) {
             resolving[host].push(callback);
             return null;
           }
         } else resolving[host] = callback ? [callback] : [];
-        
+
         var ctrl = {
           running: true,
           startTime: Date.now()
         };
-        
+
         var status = Cr.NS_OK;
-        
-        
+
+
         var resolve = function() {
           DNS._dns.asyncResolve(host, flags, new DNSListener(function() {
             if (DNS.logEnabled) DNS.log("Async " + host);
@@ -328,26 +320,26 @@ var DNS = {
               elapsed = Date.now() - t;
               DNS.log("Async DNS query on " + host + " done, " + elapsed + "ms, callbacks: " + (callbacks && callbacks.length));
             }
-            
+
             if (callbacks && callbacks.length)
               for each(var cb in callbacks)
                 cb(dnsRecord);
-            
+
           }), Thread.currentQueue);
           if (DNS.consoleDump) DNS.log("Waiting for DNS query on " + host);
           if (!callback) Thread.spin(ctrl);
         }
-        
+
         if (callback) {
           t = Date.now();
           resolve();
           return null;
         }
-        
+
         Thread.runWithQueue(resolve);
-        
+
         if (!Components.isSuccessCode(status)) throw status;
-        
+
         elapsed = ctrl.elapsed || 0;
       } else {
         t = Date.now();
@@ -359,9 +351,9 @@ var DNS = {
     } else {
       this._cache.put(host, dnsRecord = new DNSRecord(null)); // invalid host name
     }
-    
+
     if (DNS.logEnabled) DNS.log("DNS query on " + host + " done, " + elapsed + "ms");
-    
+
     if (callback) {
       callback(dnsRecord);
     } else {
@@ -369,14 +361,14 @@ var DNS = {
     }
     return dnsRecord;
   },
-  
-  
-  
+
+
+
   evict: function(host) {
     DNS.log("Removing DNS cache record for " + host);
     return this._cache.evict(host);
   },
-  
+
   invalidate: function(host) {
     var dnsRecord = this._cache.get(host);
     if (!dnsRecord.valid) return false;
@@ -384,16 +376,16 @@ var DNS = {
     dnsRecord.expireTime = 0;
     return true;
   },
-  
+
   getCached: function(host) {
     return this._cache.get(host);
   },
-  
+
   isCached: function(host) {
     var res =  this._cache.get(host);
     return res && (res.valid || !res.expired);
   },
-  
+
   isLocalURI: function(uri, all) {
     var host;
     try {
@@ -404,7 +396,7 @@ var DNS = {
     if (!host) return true; // local file:///
     return this.isLocalHost(host, all);
   },
-  
+
   isLocalHost: function(host, all, dontResolve) {
     if (host == "localhost") return true;
     if (this.isIP(host)) {
@@ -412,16 +404,16 @@ var DNS = {
     }
 
     if (all && this._cache.isExt(host) || dontResolve) return false;
-  
+
     var res = this.resolve(host, 0).isLocal(all);
 
     if (!res) {
       this._cache.putExt(host);
     }
-    
+
     return res;
   },
-  
+
   _localIPRx: /^(?:(?:0|127|10|169\.254|172\.(?:1[6-9]|2\d|3[0-1])|192\.168)\..*\.[^0]\d*$|(?:(?:255\.){3}255|::1?)$|f(?:[cd]|e(?:[c-f]|80:0*:0*:0*:))[0-9a-f]*:)/i,
   isLocalIP: function(addr) {
     // see https://bug354493.bugzilla.mozilla.org/attachment.cgi?id=329492 for a more verbose but incomplete (missing IPV6 ULA) implementation
