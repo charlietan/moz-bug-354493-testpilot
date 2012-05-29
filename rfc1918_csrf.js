@@ -22,7 +22,7 @@ var RFC1918_CSRF_dbstore;
 // experimentInfo is an obect providing metadata about the study.
 exports.experimentInfo = {
   testName: "Evaluation of Proposed Resource Loading Policy Change",
-  testId: 1881,  // must be unique across all test pilot studies
+  testId: "rfc_1918_intranet_security",
 //  testInfoUrl: "https://testpilot.mozillalabs.com/testcases/secure-sites-compatibility.html", // URL of page explaining your study, uncomment when ready
   summary: "This study is designed to evaluate the impact of changing the current resource loading policy to be implemented as a new security feature.",
 //  thumbnail: "http://websec.sv.cmu.edu/images/seclab-128.png", // URL of image representing your study
@@ -133,7 +133,7 @@ DNSRecord.prototype = {
     return Date.now() > this.expireTime;
   }
 
-}
+};
 
 
 var DNS = {
