@@ -21,10 +21,12 @@ var RFC1918_CSRF_dbstore;
 
 // experimentInfo is an obect providing metadata about the study.
 exports.experimentInfo = {
-  testName: "Evaluation of Proposed Resource Loading Policy Change",
+  testName: "Stricter Security Impact Study",
   testId: "rfc_1918_intranet_security",
 //  testInfoUrl: "https://testpilot.mozillalabs.com/testcases/secure-sites-compatibility.html", // URL of page explaining your study, uncomment when ready
-  summary: "This study is designed to evaluate the impact of changing the current resource loading policy to be implemented as a new security feature.",
+  summary: "Mozilla is considering a stricter security policy in Firefox to protect users from malicious websites."
+           + " But would this stricter policy get in the way of legitimate websites?"
+           + " This study evaluates the impact of the policy change.",
 //  thumbnail: "http://websec.sv.cmu.edu/images/seclab-128.png", // URL of image representing your study
   // (will be displayed at 90px by 90px)
   versionNumber: 1, // update this when changing your study
