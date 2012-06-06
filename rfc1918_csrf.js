@@ -64,23 +64,6 @@ exports.dataStoreInfo = {
 };  // end exports.dataStoreInfo
 
 
-/* Now for the actual observation of the events that we care about.
- * We must register a global observer object; we can optionally also
- * register a per-window observer object.  Each will get notified of
- * certain events, and can install further listeners/observers of their own.
- */
-
-// Define a per-window observer class by extending the generic one from
-// BaseClasses:
-function RFC1918_CSRF_WindowObserver(window, globalInstance) {
-  // Call base class constructor (Important!)
-  RFC1918_CSRF_WindowObserver.baseConstructor.call(this, window, globalInstance);
-}
-// set up RFC1918_CSRF_WindowObserver as a subclass of GenericWindowObserver:
-BaseClasses.extend(RFC1918_CSRF_WindowObserver,
-                   BaseClasses.GenericWindowObserver);
-RFC1918_CSRF_WindowObserver.prototype.install = function() {
-
 /*
  * Start of DNS.js from NoScript. By Giorgo Maone
  */
@@ -493,18 +476,15 @@ DNSListener.prototype = {
     return base64_data;
   }
 
-  var ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
-  var proto_proxy_svc = Cc["@mozilla.org/network/protocol-proxy-service;1"].getService(Ci.nsIProtocolProxyService);
-  var appcontent = this.window.document.getElementById("appcontent");
-  if (appcontent) {  // listen to DOM load event
-    this._listen(appcontent, "DOMContentLoaded", function(evt) {
-      let content_doc = this.window.document.getElementById("content").contentDocument;
-      let my_doc = content_doc.documentElement.innerHTML; //HTML content of the main document
-      if (!my_doc) {
-        return false;
-      }
-      var doc_loc = "" + content_doc.location; //location of the document, converted to string
-      let doc_URI = ioService.newURI(doc_loc, null, null);
+var httpChannelObserver = {
+  observe: function(subject, topic, data) {
+    let channel = subject.QueryInterface(Ci.nsIHttpChannel);
+
+    if (channel.referrer && channel.referrer.host != channel.URI.host) {
+      // Whenever we see a resource load that is referred from a different host...
+      let doc_URI = channel.referrer;
+      let proto_proxy_svc = Cc["@mozilla.org/network/protocol-proxy-service;1"]
+                              .getService(Ci.nsIProtocolProxyService);
       // Grab proxy server settings for this URI
       proto_proxy_svc.asyncResolve(doc_URI, 0, {
 
@@ -513,70 +493,46 @@ DNSListener.prototype = {
                DNS.isLocalHost(aProxyInfo.host) ) {
             let doc_URL = doc_URI.resolve("");
             let doc_hash = hash_uri(doc_URL);
-            // Check if we visited this page before
-            let db_query = "SELECT * FROM " + RFC1918_CSRF_dbstore._tableName + " WHERE urlHash = :row_id";
-            let statement = RFC1918_CSRF_dbstore._createStatement(db_query);
-            statement.params.row_id = doc_hash;
-            var not_visited = 1;
-            statement.executeAsync( {
+            let doc_level = uriLevel(doc_URI);
 
-              handleResult: function(aResultSet) {
-                if (aResultSet.getNextRow()) {
-                  not_visited = 0;
-                }
-              }, // end handleResult()
+            let url_URI = channel.URI;
+            //let url_URL = url_URI.resolve("");
+            let url_level = uriLevel(url_URI);
+            let url_hash = hash_uri(url_URI.host);
 
-              handleCompletion: function(aReason) {
-                if (not_visited) { // New Page
-                  //URL regex
-                  let urls = my_doc.match(/(src|href)\s*=\s*['"“”‘’]\b((?:https?:\/\/|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))/gi);
-                  let urls_len = urls.length;
-                  let doc_level = uriLevel(doc_URI);
-
-                  for (var i = 0; i < urls_len; i++) {
-                    let url_pos = urls[i].search(/\b((?:https?:\/\/|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))/gi);
-                    let url_str = urls[i].substring(url_pos);
-                    let url_URI = ioService.newURI(url_str, null, null);
-                    //let url_URL = url_URI.resolve("");
-                    let url_level = uriLevel(url_URI);
-                    let url_hash = hash_uri(url_URI.host);
-                    let violation = 0;
-
-                    // Higher numbered levels should not have access to lower numbered levels
-                    if (url_level < doc_level) {
-                      violation = 1;
-                    }
-
-                    // Record the data
-//console.info("v:"+violation+" doc("+doc_level+")"+doc_hash+":"+doc_URL+" url("+url_level+")"+url_hash+":"+url_URI.host);
-                    exports.handlers.record({
-                      urlHash: doc_hash,
-                      resourceHash: url_hash,
-                      entryViolation: violation
-                    });// end exports.handlers.record()
-                  }  // end for (i = 0 to url_len)
-                }  // end if not_visited
-              } // end handleCompletion()
-
-            } ); // end statement.executeAsync()
-
+            // Higher numbered levels should not have access to lower numbered levels
+            if (url_level < doc_level) {
+              // On violation, record unhashed url and resource:
+              dump("Recording violator! + " + doc_URL + " -> " + url_URI.host);
+              exports.handlers.record({
+                urlHash: doc_URL,
+                resourceHash: url_URI.host,
+                entryViolation: 1
+              });
+            } else {
+              dump("Recording non-violator.");
+               // When it's not a violation, record hashed (TODO or nothing?)
+               // Record the data
+               exports.handlers.record({
+                 urlHash: doc_hash,
+                 resourceHash: url_hash,
+                 entryViolation: 0
+               });// end exports.handlers.record()
+             } // end if not violation
           } // end if we have no proxy configured
         } // end onProxyAvailable()
 
       } ); // end statement proto_proxy_svc.asyncResolve()
 
-    }, true); // end this._listen()
-  } // end if (appcontent)
-}; // end RFC1918_CSRF_WindowObserver.prototype.install
-
+    }
+  }
+};
 
 // Now we'll define the global observer class by extending the generic one:
 function RFC1918_CSRF_GlobalObserver() {
    // It's very important that our constructor function calls the base
    // class constructor function:
-   RFC1918_CSRF_GlobalObserver.baseConstructor.call(this,
-                                                 RFC1918_CSRF_WindowObserver);
-
+  RFC1918_CSRF_GlobalObserver.baseConstructor.call(this, null);
 }
  // use the provided helper method 'extend()' to handle setting up the
  // whole prototype chain for us correctly:
@@ -588,7 +544,16 @@ RFC1918_CSRF_GlobalObserver.prototype.onExperimentStartup = function(store) {
   // reference:
   RFC1918_CSRF_GlobalObserver.superClass.onExperimentStartup.call(this, store);
   RFC1918_CSRF_dbstore = store;
+
+  var obSvc = Cc["@mozilla.org/observer-service;1"]
+                      .getService(Ci.nsIObserverService);
+  obSvc.addObserver(httpChannelObserver, "http-on-examine-response", false);
 };
+RFC1918_CSRF_GlobalObserver.prototype.onExperimentShutdown = function(store) {
+  var obSvc = Cc["@mozilla.org/observer-service;1"]
+                      .getService(Ci.nsIObserverService);
+  obSvc.removeObserver(httpChannelObserver, "http-on-examine-response");
+}
 
 // Instantiate and export the global observer (required!)
 exports.handlers = new RFC1918_CSRF_GlobalObserver();
@@ -607,8 +572,8 @@ RFC1918_CSRF_WebContent.prototype.__defineGetter__("dataCanvas",
       return '<div class="dataBox"><h3>View Your Data:</h3>' +
       this.dataViewExplanation +
       this.rawDataLink +
-      '<canvas id="data-canvas" width="480" height="400"></canvas>' +
-      this.saveButtons + '</div>';
+      '<div id="violators-list"></div>' +
+      '</div>';
   });
 RFC1918_CSRF_WebContent.prototype.__defineGetter__("dataViewExplanation",
   function() {
@@ -623,17 +588,28 @@ RFC1918_CSRF_WebContent.prototype.__defineGetter__("dataViewExplanation",
 //graphing function
 RFC1918_CSRF_WebContent.prototype.onPageLoad = function(experiment, document, graphUtils){
   let self = this;
-  let canvas = document.getElementById("data-canvas");
+  let list = document.getElementById("violators-list");
   experiment.getDataStoreAsJSON(function(rawData){
-    let vio_count = 0;
-    for each (let row in rawData){
-      if (row.entryViolation == 1) vio_count++;
-    }
     let row_count = rawData.length;
-
-    let dataSet = [ { name: "Would violate policy", frequency: vio_count},
-      {name: "Would not violate policy", frequency: row_count - vio_count}];
-    self.drawPieChart(canvas, dataSet);
+    let vio_count = 0;
+    let violatingDomains = [];
+    for each (let row in rawData){
+      if (row.entryViolation == 1) {
+        vio_count++;
+        var text = row.urlHash + " -> " + row.resourceHash;
+        if (violatingDomains.indexOf(text) == -1) {
+          // don't show user duplicates
+          violatingDomains.push(text);
+        }
+      }
+    }
+    if (vio_count > 0) {
+      list.innerHTML = "<p>The following links were found that would violate the policy: </p>"
+        + "<ul><li>" + violatingDomains.join("</li><li>") + "</li></ul>";
+    } else {
+      list.innerHTML = "<p>No links were found that would violate the policy.</p>";
+    }
+    // TODO also give number of violations out of total number of page loads?
    });
 };
 
