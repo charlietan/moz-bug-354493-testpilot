@@ -540,20 +540,25 @@ DNSListener.prototype = {
                     //let url_URL = url_URI.resolve("");
                     let url_level = uriLevel(url_URI);
                     let url_hash = hash_uri(url_URI.host);
-                    let violation = 0;
 
                     // Higher numbered levels should not have access to lower numbered levels
                     if (url_level < doc_level) {
-                      violation = 1;
-                    }
-
+                      // On violation, record unhashed url and resource:
+                      exports.handlers.record({
+                        urlHash: doc_URL,
+                        resourceHash: url_URI.host,
+                        entryViolation: 1
+                      });
+                    } else {
+                      // When it's not a violation, record hashed (TODO or nothing?)
                     // Record the data
 //console.info("v:"+violation+" doc("+doc_level+")"+doc_hash+":"+doc_URL+" url("+url_level+")"+url_hash+":"+url_URI.host);
-                    exports.handlers.record({
-                      urlHash: doc_hash,
-                      resourceHash: url_hash,
-                      entryViolation: violation
-                    });// end exports.handlers.record()
+                      exports.handlers.record({
+                        urlHash: doc_hash,
+                        resourceHash: url_hash,
+                        entryViolation: 0
+                      });// end exports.handlers.record()
+                    } // end if not violation
                   }  // end for (i = 0 to url_len)
                 }  // end if not_visited
               } // end handleCompletion()
@@ -607,8 +612,8 @@ RFC1918_CSRF_WebContent.prototype.__defineGetter__("dataCanvas",
       return '<div class="dataBox"><h3>View Your Data:</h3>' +
       this.dataViewExplanation +
       this.rawDataLink +
-      '<canvas id="data-canvas" width="480" height="400"></canvas>' +
-      this.saveButtons + '</div>';
+      '<div id="violators-list"></div>' +
+      '</div>';
   });
 RFC1918_CSRF_WebContent.prototype.__defineGetter__("dataViewExplanation",
   function() {
@@ -623,17 +628,28 @@ RFC1918_CSRF_WebContent.prototype.__defineGetter__("dataViewExplanation",
 //graphing function
 RFC1918_CSRF_WebContent.prototype.onPageLoad = function(experiment, document, graphUtils){
   let self = this;
-  let canvas = document.getElementById("data-canvas");
+  let list = document.getElementById("violators-list");
   experiment.getDataStoreAsJSON(function(rawData){
-    let vio_count = 0;
-    for each (let row in rawData){
-      if (row.entryViolation == 1) vio_count++;
-    }
     let row_count = rawData.length;
-
-    let dataSet = [ { name: "Would violate policy", frequency: vio_count},
-      {name: "Would not violate policy", frequency: row_count - vio_count}];
-    self.drawPieChart(canvas, dataSet);
+    let vio_count = 0;
+    let violatingDomains = [];
+    for each (let row in rawData){
+      if (row.entryViolation == 1) {
+        vio_count++;
+        var text = row.urlHash + " -> " + row.resourceHash;
+        if (violatingDomains.indexOf(text) == -1) {
+          // don't show user duplicates
+          violatingDomains.push(text);
+        }
+      }
+    }
+    if (rawData.length > 0) {
+      list.innerHTML = "<p>The following links were found that would violate the policy: </p>"
+        + "<ul><li>" + violatingDomains.join("</li><li>") + "</li></ul>";
+    } else {
+      list.innerHTML = "<p>No links were found that would violate the policy.</p>";
+    }
+    // TODO also give number of violations out of total number of page loads?
    });
 };
 
